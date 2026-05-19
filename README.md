@@ -53,6 +53,61 @@ A production-ready Express.js boilerplate with PostgreSQL/MySQL support, JWT aut
 └── swagger.json         # Generated Swagger spec
 ```
 
+## Diagrams
+
+The following diagrams illustrate the architecture and flow of this boilerplate:
+
+### System Architecture
+
+![System Architecture](docs/illustrations/01-system-architecture.svg)
+
+### Authentication Flow
+
+![Authentication Flow](docs/illustrations/02-authentication-flow.svg)
+
+### RBAC/ABAC Authorization
+
+![RBAC/ABAC](docs/illustrations/03-rbac-abac.svg)
+
+### Database Schema
+
+![Database Schema](docs/illustrations/04-database-schema.svg)
+
+### Middleware Pipeline
+
+![Middleware Pipeline](docs/illustrations/05-middleware-pipeline.svg)
+
+### API Endpoints
+
+![API Endpoints](docs/illustrations/06-api-endpoints.svg)
+
+### Multi-Tenancy
+
+![Multi-Tenancy](docs/illustrations/07-multi-tenancy.svg)
+
+### Backup & Logging
+
+![Backup & Logging](docs/illustrations/08-backup-logging.svg)
+
+### Security Layers
+
+![Security Layers](docs/illustrations/09-security-layers.svg)
+
+### Project Structure
+
+![Project Structure](docs/illustrations/10-project-structure.svg)
+
+### Docker Architecture
+
+![Docker Architecture](docs/illustrations/11-docker-architecture.svg)
+
+### Interactive Documentation
+
+For interactive HTML documentation with embedded diagrams, see:
+
+- [HTML Documentation](docs/DOCUMENTATION.html)
+- [Markdown Documentation](docs/DOCUMENTATION.md)
+
 ## Getting Started
 
 ### Prerequisites
