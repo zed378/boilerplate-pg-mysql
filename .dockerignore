@@ -1,0 +1,8 @@
+.env
+node_modules
+Dockerfile
+log
+data
+backup
+storage
+plans
