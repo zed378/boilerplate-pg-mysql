@@ -107,6 +107,8 @@ const accessLog = morgan(customFormat, {
       "/favicon.ico",
       "/docs",
       "/",
+      "/documentation",
+      "/standards",
     ].includes(req.originalUrl);
   },
 });
