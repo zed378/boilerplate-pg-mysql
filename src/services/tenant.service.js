@@ -111,7 +111,7 @@ exports.fetchTenants = async ({ find, page = 1, limit = DEFAULT_LIMIT }) => {
     return result;
   } catch (error) {
     logger.error("Error fetching tenants", { error: error.message });
-    throw new AppError("Internal server error", 500);
+    throw new AppError(500, "Internal server error");
   }
 };
 
@@ -161,7 +161,7 @@ exports.fetchSpecificTenant = async (tenantId) => {
     };
   } catch (error) {
     logger.error("Error fetching specific tenant", { error: error.message });
-    throw new AppError("Internal server error", 500);
+    throw new AppError(500, "Internal server error");
   }
 };
 
@@ -184,7 +184,7 @@ exports.createTenant = async (input, createdBy) => {
 
     if (existingCode) {
       await transaction.rollback();
-      throw new AppError("Tenant code already exists", 409);
+      throw new AppError(409, "Tenant code already exists");
     }
 
     // Check if name already exists
@@ -195,7 +195,7 @@ exports.createTenant = async (input, createdBy) => {
 
     if (existingName) {
       await transaction.rollback();
-      throw new AppError("Tenant name already exists", 409);
+      throw new AppError(409, "Tenant name already exists");
     }
 
     const tenant = await Tenants.create(
@@ -254,7 +254,7 @@ exports.updateTenant = async (tenantId, input, updatedBy) => {
 
     if (!tenant) {
       await transaction.rollback();
-      throw new AppError("Tenant not found", 404);
+      throw new AppError(404, "Tenant not found");
     }
 
     // Check if code already exists (excluding current tenant)
@@ -266,7 +266,7 @@ exports.updateTenant = async (tenantId, input, updatedBy) => {
 
       if (existingCode) {
         await transaction.rollback();
-        throw new AppError("Tenant code already exists", 409);
+        throw new AppError(409, "Tenant code already exists");
       }
     }
 
@@ -279,7 +279,7 @@ exports.updateTenant = async (tenantId, input, updatedBy) => {
 
       if (existingName) {
         await transaction.rollback();
-        throw new AppError("Tenant name already exists", 409);
+        throw new AppError(409, "Tenant name already exists");
       }
     }
 
@@ -340,7 +340,7 @@ exports.deleteTenant = async (tenantId, deletedBy) => {
 
     if (!tenant) {
       await transaction.rollback();
-      throw new AppError("Tenant not found", 404);
+      throw new AppError(404, "Tenant not found");
     }
 
     // Check if tenant has users
@@ -439,7 +439,7 @@ exports.getTenantSettings = async (tenantId) => {
     };
   } catch (error) {
     logger.error("Error fetching tenant settings", { error: error.message });
-    throw new AppError("Internal server error", 500);
+    throw new AppError(500, "Internal server error");
   }
 };
 
@@ -454,7 +454,7 @@ exports.updateTenantSettings = async (tenantId, settingsData, updatedBy) => {
 
     if (!tenant) {
       await transaction.rollback();
-      throw new AppError("Tenant not found", 404);
+      throw new AppError(404, "Tenant not found");
     }
 
     // Upsert each setting
@@ -527,6 +527,6 @@ exports.getTenantUserCount = async (tenantId) => {
     };
   } catch (error) {
     logger.error("Error fetching tenant user count", { error: error.message });
-    throw new AppError("Internal server error", 500);
+    throw new AppError(500, "Internal server error");
   }
 };
