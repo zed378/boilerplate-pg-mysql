@@ -152,6 +152,7 @@
             <a href="#17-documentation-standards">17. Documentation Standards</a>
             <a href="#18-environment-variables">18. Environment Variables</a>
             <a href="#19-git--deployment">19. Git & Deployment</a>
+            <a href="#20-unit-testing-standards">20. Unit Testing Standards</a>
             <div style="border-top: 1px solid rgba(255,255,255,0.1); margin: 10px 0;"></div>
             <a href="#quick-reference" style="opacity: 0.5; font-size: 12px;">Quick Reference</a>
         </div>
@@ -186,6 +187,7 @@
 <li><a href="#17-documentation-standards">Documentation Standards</a></li>
 <li><a href="#18-environment-variables">Environment Variables</a></li>
 <li><a href="#19-git--deployment">Git &amp; Deployment</a></li>
+<li><a href="#20-unit-testing-standards">Unit Testing Standards</a></li>
 </ol>
 <hr>
 <a id="1-project-overview"></a><h2> 1. Project Overview</h2>
@@ -1225,6 +1227,308 @@ docker-compose logs -f backend
 # Regenerate docs in container
 docker exec -it backend node scripts/generate-html-doc.js
 </code></pre>
+<hr>
+<a id="20-unit-testing-standards"></a><h2> 20. Unit Testing Standards</h2>
+<h3>Test Framework &amp; Configuration</h3>
+<ul>
+<li><strong>Framework</strong>: Jest</li>
+<li><strong>Configuration</strong>: <code>jest.config.js</code></li>
+<li><strong>Test Directory</strong>: <code>src/tests/</code></li>
+<li><strong>Test File Pattern</strong>: <code>*.test.js</code> or <code>*.spec.js</code></li>
+<li><strong>Test Match</strong>: <code>**/tests/**/*.test.js</code>, <code>**/tests/**/*.spec.js</code></li>
+</ul>
+<h3>Test Structure</h3>
+<pre><code>src/tests/
+├── test.utils.js              # Shared test helpers
+├── utils/                     # Utility function tests
+│   ├── appError.test.js
+│   ├── controllerWrapper.test.js
+│   ├── response.test.js
+│   └── ...
+├── services/                  # Service layer tests
+│   ├── tenantAudit.service.test.js
+│   ├── tenantContext.test.js
+│   └── ...
+├── validators/                # Validator tests
+│   ├── auth.validator.test.js
+│   └── ...
+└── middleware/                # Middleware tests
+</code></pre>
+<h3>Test File Naming</h3>
+<ul>
+<li><strong>Service tests</strong>: <code>{service_name}.service.test.js</code></li>
+<li><strong>Controller tests</strong>: <code>{controller_name}.controller.test.js</code></li>
+<li><strong>Middleware tests</strong>: <code>{middleware_name}.test.js</code></li>
+<li><strong>Utility tests</strong>: <code>{utility_name}.test.js</code></li>
+<li><strong>Validator tests</strong>: <code>{validator_name}.validator.test.js</code></li>
+</ul>
+<h3>Test Organization</h3>
+<pre><code class="language-javascript">/**
+ * Tests for {module_name}
+ */
+
+// 1. Mock dependencies first
+jest.mock(&quot;../../models&quot;, () =&gt; ({
+  ModelName: mockModel,
+}));
+
+jest.mock(&quot;../../utils/helper&quot;, () =&gt; ({
+  helperFunction: jest.fn(),
+}));
+
+// 2. Import mocked modules
+const { mockedFunction } = require(&quot;../../services/service_name&quot;);
+
+describe(&quot;Module Name&quot;, () =&gt; {
+  // 3. Setup before each test
+  beforeEach(() =&gt; {
+    jest.clearAllMocks();
+  });
+
+  describe(&quot;Function Name&quot;, () =&gt; {
+    it(&quot;should {expected_behavior} when {condition}&quot;, async () =&gt; {
+      // Arrange
+      const input = { ... };
+
+      // Act
+      const result = await functionName(input);
+
+      // Assert
+      expect(result).toEqual(expectedOutput);
+    });
+  });
+});
+</code></pre>
+<h3>Test Naming Conventions</h3>
+<ul>
+<li><strong>Describe blocks</strong>: Use module/service names
+<ul>
+<li><code>describe(&quot;Tenant Audit Service&quot;)</code></li>
+<li><code>describe(&quot;AppError&quot;)</code></li>
+</ul>
+</li>
+<li><strong>Nested describe blocks</strong>: Use function names
+<ul>
+<li><code>describe(&quot;createLog&quot;)</code></li>
+<li><code>describe(&quot;toJSON&quot;)</code></li>
+</ul>
+</li>
+<li><strong>It blocks</strong>: Use descriptive sentences
+<ul>
+<li><code>it(&quot;should create an audit log entry&quot;)</code></li>
+<li><code>it(&quot;should return error as JSON object without details in production&quot;)</code></li>
+<li><code>it(&quot;should set status, message, isOperational, and details&quot;)</code></li>
+</ul>
+</li>
+</ul>
+<h3>Mocking Standards</h3>
+<h4>Mocking Models</h4>
+<pre><code class="language-javascript">const mockModel = {
+  findOne: jest.fn(),
+  create: jest.fn(),
+  update: jest.fn(),
+  destroy: jest.fn(),
+  findAndCountAll: jest.fn(),
+  count: jest.fn(),
+};
+
+jest.mock(&quot;../../models&quot;, () =&gt; ({
+  ModelName: mockModel,
+}));
+</code></pre>
+<h4>Mocking Services</h4>
+<pre><code class="language-javascript">jest.mock(&quot;../../services/other_service&quot;, () =&gt; ({
+  otherFunction: jest.fn().mockResolvedValue({ success: true }),
+}));
+</code></pre>
+<h4>Mocking Request/Response</h4>
+<pre><code class="language-javascript">const mockReq = {
+  body: { fieldName: &quot;value&quot; },
+  query: { page: &quot;1&quot; },
+  params: { id: &quot;123&quot; },
+  user: { id: &quot;user-1&quot;, tenantId: &quot;tenant-1&quot; },
+  ip: &quot;127.0.0.1&quot;,
+  headers: { &quot;user-agent&quot;: &quot;TestBrowser&quot; },
+};
+
+const mockRes = {
+  status: jest.fn().mockReturnThis(),
+  json: jest.fn().mockReturnThis(),
+  locals: {},
+};
+</code></pre>
+<h4>Mocking Transactions</h4>
+<pre><code class="language-javascript">const mockTransaction = {
+  commit: jest.fn().mockResolvedValue(undefined),
+  rollback: jest.fn().mockResolvedValue(undefined),
+  toObject: jest.fn().mockReturnValue({}),
+  LOCK: { UPDATE: &quot;UPDATE&quot; },
+};
+</code></pre>
+<h3>Test Patterns</h3>
+<h4>Testing Success Cases</h4>
+<pre><code class="language-javascript">it(&quot;should return user data when found&quot;, async () =&gt; {
+  const mockUser = { id: &quot;1&quot;, email: &quot;test@example.com&quot; };
+  Users.findOne.mockResolvedValue(mockUser);
+
+  const result = await getUser(&quot;1&quot;);
+
+  expect(Users.findOne).toHaveBeenCalledWith({ where: { id: &quot;1&quot; } });
+  expect(result).toEqual(mockUser);
+});
+</code></pre>
+<h4>Testing Error Cases</h4>
+<pre><code class="language-javascript">it(&quot;should throw NotFoundError when user not found&quot;, async () =&gt; {
+  Users.findOne.mockResolvedValue(null);
+
+  await expect(getUser(&quot;invalid-id&quot;)).rejects.toThrow(&quot;User not found&quot;);
+  // Or
+  await expect(getUser(&quot;invalid-id&quot;)).rejects.toEqual({
+    status: 404,
+    message: &quot;User not found&quot;,
+  });
+});
+</code></pre>
+<h4>Testing Conditional Logic</h4>
+<pre><code class="language-javascript">it(&quot;should return error without details in production&quot;, () =&gt; {
+  const originalEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = &quot;production&quot;;
+  const error = new AppError(400, &quot;Bad request&quot;, true, { field: &quot;email&quot; });
+
+  const json = error.toJSON();
+
+  expect(json).toEqual({
+    success: false,
+    status: 400,
+    message: &quot;Bad request&quot;,
+  });
+
+  process.env.NODE_ENV = originalEnv;
+});
+</code></pre>
+<h4>Testing Async Operations</h4>
+<pre><code class="language-javascript">it(&quot;should handle async operations correctly&quot;, async () =&gt; {
+  const mockData = { id: &quot;1&quot;, name: &quot;test&quot; };
+  Model.create.mockResolvedValue(mockData);
+
+  const result = await createResource(mockData);
+
+  expect(result).toEqual(mockData);
+  expect(Model.create).toHaveBeenCalledWith(mockData);
+});
+</code></pre>
+<h4>Testing Multiple Scenarios</h4>
+<pre><code class="language-javascript">describe(&quot;logAuthEvent&quot;, () =&gt; {
+  it(&quot;should log login success with INFO severity&quot;, async () =&gt; {
+    // ...
+  });
+
+  it(&quot;should log login failed with WARNING severity&quot;, async () =&gt; {
+    // ...
+  });
+});
+</code></pre>
+<h3>Test Utilities</h3>
+<p>Use shared helpers from <code>src/tests/test.utils.js</code>:</p>
+<pre><code class="language-javascript">const {
+  createMockRes,
+  createMockReq,
+  createMockNext,
+  createMockModel,
+  createMockTransaction,
+  wait,
+  mockThrow,
+  mockResolve,
+  mockResolveThenThrow,
+} = require(&quot;../test.utils&quot;);
+</code></pre>
+<h3>Coverage Requirements</h3>
+<ul>
+<li><strong>Target</strong>: 80% for branches, functions, lines, and statements</li>
+<li><strong>Ignored patterns</strong>: <code>/node_modules/</code>, <code>/tests/</code>, config files</li>
+<li><strong>Run tests</strong>: <code>npm test</code> or <code>npx jest</code></li>
+</ul>
+<h3>Best Practices</h3>
+<ol>
+<li>
+<p><strong>Arrange-Act-Assert</strong>: Structure tests in three clear phases</p>
+<pre><code class="language-javascript">// Arrange - setup inputs and mocks
+// Act - execute the function
+// Assert - verify the results
+</code></pre>
+</li>
+<li>
+<p><strong>One assertion per concept</strong>: Each <code>it</code> block should test one specific behavior</p>
+</li>
+<li>
+<p><strong>Isolate tests</strong>: Use <code>beforeEach</code> to clear mocks and reset state</p>
+</li>
+<li>
+<p><strong>Mock external dependencies</strong>: Never call real databases, APIs, or file systems in unit tests</p>
+</li>
+<li>
+<p><strong>Test edge cases</strong>: Test null, undefined, empty arrays, boundary values</p>
+</li>
+<li>
+<p><strong>Clean up environment</strong>: Restore <code>process.env</code> changes after tests</p>
+</li>
+<li>
+<p><strong>Use meaningful data</strong>: Test data should be realistic and descriptive</p>
+</li>
+<li>
+<p><strong>Test documentation</strong>: Include JSDoc comments for complex test scenarios</p>
+</li>
+</ol>
+<h3>Running Tests</h3>
+<pre><code class="language-bash"># Run all tests
+npm test
+
+# Run specific test file
+npx jest src/tests/utils/appError.test.js
+
+# Run with coverage
+npx jest --coverage
+
+# Watch mode
+npx jest --watch
+</code></pre>
+<h3>Test Categories</h3>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Location</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Unit Tests</td>
+<td><code>src/tests/utils/</code></td>
+<td>Test utility functions</td>
+</tr>
+<tr>
+<td>Service Tests</td>
+<td><code>src/tests/services/</code></td>
+<td>Test business logic</td>
+</tr>
+<tr>
+<td>Validator Tests</td>
+<td><code>src/tests/validators/</code></td>
+<td>Test Joi schemas</td>
+</tr>
+<tr>
+<td>Middleware Tests</td>
+<td><code>src/tests/middleware/</code></td>
+<td>Test middleware functions</td>
+</tr>
+<tr>
+<td>Controller Tests</td>
+<td><code>src/tests/controllers/</code></td>
+<td>Test request/response flow</td>
+</tr>
+</tbody>
+</table>
 <hr>
 <a id="quick-reference"></a><h2> Quick Reference</h2>
 <h3>Key Patterns</h3>

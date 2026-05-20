@@ -53,6 +53,7 @@ const idMap = [
   ["17. Documentation Standards", "17-documentation-standards"],
   ["18. Environment Variables", "18-environment-variables"],
   ["19. Git", "19-git--deployment"],
+  ["20. Unit Testing Standards", "20-unit-testing-standards"],
   ["Quick Reference", "quick-reference"],
 ];
 
@@ -232,6 +233,7 @@ const fullHtml = `<!DOCTYPE html>
             <a href="#17-documentation-standards">17. Documentation Standards</a>
             <a href="#18-environment-variables">18. Environment Variables</a>
             <a href="#19-git--deployment">19. Git & Deployment</a>
+            <a href="#20-unit-testing-standards">20. Unit Testing Standards</a>
             <div style="border-top: 1px solid rgba(255,255,255,0.1); margin: 10px 0;"></div>
             <a href="#quick-reference" style="opacity: 0.5; font-size: 12px;">Quick Reference</a>
         </div>

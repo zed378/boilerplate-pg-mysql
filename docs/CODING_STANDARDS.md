@@ -21,6 +21,7 @@
 17. [Documentation Standards](#17-documentation-standards)
 18. [Environment Variables](#18-environment-variables)
 19. [Git & Deployment](#19-git--deployment)
+20. [Unit Testing Standards](#20-unit-testing-standards)
 
 ---
 
@@ -999,6 +1000,309 @@ docker-compose logs -f backend
 # Regenerate docs in container
 docker exec -it backend node scripts/generate-html-doc.js
 ```
+
+---
+
+## 20. Unit Testing Standards
+
+### Test Framework & Configuration
+
+- **Framework**: Jest
+- **Configuration**: `jest.config.js`
+- **Test Directory**: `src/tests/`
+- **Test File Pattern**: `*.test.js` or `*.spec.js`
+- **Test Match**: `**/tests/**/*.test.js`, `**/tests/**/*.spec.js`
+
+### Test Structure
+
+```
+src/tests/
+├── test.utils.js              # Shared test helpers
+├── utils/                     # Utility function tests
+│   ├── appError.test.js
+│   ├── controllerWrapper.test.js
+│   ├── response.test.js
+│   └── ...
+├── services/                  # Service layer tests
+│   ├── tenantAudit.service.test.js
+│   ├── tenantContext.test.js
+│   └── ...
+├── validators/                # Validator tests
+│   ├── auth.validator.test.js
+│   └── ...
+└── middleware/                # Middleware tests
+```
+
+### Test File Naming
+
+- **Service tests**: `{service_name}.service.test.js`
+- **Controller tests**: `{controller_name}.controller.test.js`
+- **Middleware tests**: `{middleware_name}.test.js`
+- **Utility tests**: `{utility_name}.test.js`
+- **Validator tests**: `{validator_name}.validator.test.js`
+
+### Test Organization
+
+```javascript
+/**
+ * Tests for {module_name}
+ */
+
+// 1. Mock dependencies first
+jest.mock("../../models", () => ({
+  ModelName: mockModel,
+}));
+
+jest.mock("../../utils/helper", () => ({
+  helperFunction: jest.fn(),
+}));
+
+// 2. Import mocked modules
+const { mockedFunction } = require("../../services/service_name");
+
+describe("Module Name", () => {
+  // 3. Setup before each test
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe("Function Name", () => {
+    it("should {expected_behavior} when {condition}", async () => {
+      // Arrange
+      const input = { ... };
+
+      // Act
+      const result = await functionName(input);
+
+      // Assert
+      expect(result).toEqual(expectedOutput);
+    });
+  });
+});
+```
+
+### Test Naming Conventions
+
+- **Describe blocks**: Use module/service names
+  - `describe("Tenant Audit Service")`
+  - `describe("AppError")`
+- **Nested describe blocks**: Use function names
+  - `describe("createLog")`
+  - `describe("toJSON")`
+- **It blocks**: Use descriptive sentences
+  - `it("should create an audit log entry")`
+  - `it("should return error as JSON object without details in production")`
+  - `it("should set status, message, isOperational, and details")`
+
+### Mocking Standards
+
+#### Mocking Models
+
+```javascript
+const mockModel = {
+  findOne: jest.fn(),
+  create: jest.fn(),
+  update: jest.fn(),
+  destroy: jest.fn(),
+  findAndCountAll: jest.fn(),
+  count: jest.fn(),
+};
+
+jest.mock("../../models", () => ({
+  ModelName: mockModel,
+}));
+```
+
+#### Mocking Services
+
+```javascript
+jest.mock("../../services/other_service", () => ({
+  otherFunction: jest.fn().mockResolvedValue({ success: true }),
+}));
+```
+
+#### Mocking Request/Response
+
+```javascript
+const mockReq = {
+  body: { fieldName: "value" },
+  query: { page: "1" },
+  params: { id: "123" },
+  user: { id: "user-1", tenantId: "tenant-1" },
+  ip: "127.0.0.1",
+  headers: { "user-agent": "TestBrowser" },
+};
+
+const mockRes = {
+  status: jest.fn().mockReturnThis(),
+  json: jest.fn().mockReturnThis(),
+  locals: {},
+};
+```
+
+#### Mocking Transactions
+
+```javascript
+const mockTransaction = {
+  commit: jest.fn().mockResolvedValue(undefined),
+  rollback: jest.fn().mockResolvedValue(undefined),
+  toObject: jest.fn().mockReturnValue({}),
+  LOCK: { UPDATE: "UPDATE" },
+};
+```
+
+### Test Patterns
+
+#### Testing Success Cases
+
+```javascript
+it("should return user data when found", async () => {
+  const mockUser = { id: "1", email: "test@example.com" };
+  Users.findOne.mockResolvedValue(mockUser);
+
+  const result = await getUser("1");
+
+  expect(Users.findOne).toHaveBeenCalledWith({ where: { id: "1" } });
+  expect(result).toEqual(mockUser);
+});
+```
+
+#### Testing Error Cases
+
+```javascript
+it("should throw NotFoundError when user not found", async () => {
+  Users.findOne.mockResolvedValue(null);
+
+  await expect(getUser("invalid-id")).rejects.toThrow("User not found");
+  // Or
+  await expect(getUser("invalid-id")).rejects.toEqual({
+    status: 404,
+    message: "User not found",
+  });
+});
+```
+
+#### Testing Conditional Logic
+
+```javascript
+it("should return error without details in production", () => {
+  const originalEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
+  const error = new AppError(400, "Bad request", true, { field: "email" });
+
+  const json = error.toJSON();
+
+  expect(json).toEqual({
+    success: false,
+    status: 400,
+    message: "Bad request",
+  });
+
+  process.env.NODE_ENV = originalEnv;
+});
+```
+
+#### Testing Async Operations
+
+```javascript
+it("should handle async operations correctly", async () => {
+  const mockData = { id: "1", name: "test" };
+  Model.create.mockResolvedValue(mockData);
+
+  const result = await createResource(mockData);
+
+  expect(result).toEqual(mockData);
+  expect(Model.create).toHaveBeenCalledWith(mockData);
+});
+```
+
+#### Testing Multiple Scenarios
+
+```javascript
+describe("logAuthEvent", () => {
+  it("should log login success with INFO severity", async () => {
+    // ...
+  });
+
+  it("should log login failed with WARNING severity", async () => {
+    // ...
+  });
+});
+```
+
+### Test Utilities
+
+Use shared helpers from `src/tests/test.utils.js`:
+
+```javascript
+const {
+  createMockRes,
+  createMockReq,
+  createMockNext,
+  createMockModel,
+  createMockTransaction,
+  wait,
+  mockThrow,
+  mockResolve,
+  mockResolveThenThrow,
+} = require("../test.utils");
+```
+
+### Coverage Requirements
+
+- **Target**: 80% for branches, functions, lines, and statements
+- **Ignored patterns**: `/node_modules/`, `/tests/`, config files
+- **Run tests**: `npm test` or `npx jest`
+
+### Best Practices
+
+1. **Arrange-Act-Assert**: Structure tests in three clear phases
+
+   ```javascript
+   // Arrange - setup inputs and mocks
+   // Act - execute the function
+   // Assert - verify the results
+   ```
+
+2. **One assertion per concept**: Each `it` block should test one specific behavior
+
+3. **Isolate tests**: Use `beforeEach` to clear mocks and reset state
+
+4. **Mock external dependencies**: Never call real databases, APIs, or file systems in unit tests
+
+5. **Test edge cases**: Test null, undefined, empty arrays, boundary values
+
+6. **Clean up environment**: Restore `process.env` changes after tests
+
+7. **Use meaningful data**: Test data should be realistic and descriptive
+
+8. **Test documentation**: Include JSDoc comments for complex test scenarios
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run specific test file
+npx jest src/tests/utils/appError.test.js
+
+# Run with coverage
+npx jest --coverage
+
+# Watch mode
+npx jest --watch
+```
+
+### Test Categories
+
+| Category         | Location                 | Purpose                    |
+| ---------------- | ------------------------ | -------------------------- |
+| Unit Tests       | `src/tests/utils/`       | Test utility functions     |
+| Service Tests    | `src/tests/services/`    | Test business logic        |
+| Validator Tests  | `src/tests/validators/`  | Test Joi schemas           |
+| Middleware Tests | `src/tests/middleware/`  | Test middleware functions  |
+| Controller Tests | `src/tests/controllers/` | Test request/response flow |
 
 ---
 
