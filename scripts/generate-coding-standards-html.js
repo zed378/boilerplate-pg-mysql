@@ -30,7 +30,46 @@ try {
 }
 
 // Convert markdown to HTML
-const htmlContent = md.render(markdownContent);
+let htmlContent = md.render(markdownContent);
+
+// Map of heading text (as it appears in HTML) to desired ID for sidebar navigation
+const idMap = [
+  ["1. Project Overview", "1-project-overview"],
+  ["2. Naming Conventions", "2-naming-conventions"],
+  ["3. File Structure", "3-file-structure"],
+  ["4. Controller Standards", "4-controller-standards"],
+  ["5. Service Standards", "5-service-standards"],
+  ["6. Route Standards", "6-route-standards"],
+  ["7. Validator Standards", "7-validator-standards"],
+  ["8. Utility Standards", "8-utility-standards"],
+  ["9. Middleware Standards", "9-middleware-standards"],
+  ["10. Model Standards", "10-model-standards"],
+  ["11. Error Handling", "11-error-handling"],
+  ["12. Response Format", "12-response-format"],
+  ["13. Permission Format", "13-permission-format"],
+  ["14. Database Standards", "14-database-standards"],
+  ["15. Caching Standards", "15-caching-standards"],
+  ["16. Message Queue Standards", "16-message-queue-standards"],
+  ["17. Documentation Standards", "17-documentation-standards"],
+  ["18. Environment Variables", "18-environment-variables"],
+  ["19. Git", "19-git--deployment"],
+  ["Quick Reference", "quick-reference"],
+];
+
+// Add anchor IDs to h2 headings for sidebar navigation
+idMap.forEach(([headingText, id]) => {
+  // Escape special regex characters
+  const escapedHeading = headingText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Match h2 with the heading text (handle & entities too)
+  const h2Regex = new RegExp(`(</?h2[^>]*>)\\s*${escapedHeading}`, "is");
+
+  if (h2Regex.test(htmlContent)) {
+    htmlContent = htmlContent.replace(
+      h2Regex,
+      `<a id="${id}"></a>$1 ${headingText}`,
+    );
+  }
+});
 
 // Generate full HTML page
 const generatedDate = new Date().toLocaleDateString("en-US", {
@@ -98,7 +137,7 @@ const fullHtml = `<!DOCTYPE html>
         
         h2 {
             font-size: 1.8em; color: var(--secondary); margin-top: 50px; margin-bottom: 20px;
-            padding-bottom: 10px; border-bottom: 2px solid var(--primary); scroll-margin-top: 20px;
+            padding-bottom: 10px; border-bottom: 2px solid var(--primary); scroll-margin-top: 80px;
         }
         h3 { font-size: 1.4em; color: #34495e; margin-top: 30px; margin-bottom: 15px; }
         h4 { font-size: 1.2em; color: #34495e; margin-top: 25px; margin-bottom: 10px; }

@@ -57,7 +57,7 @@
         
         h2 {
             font-size: 1.8em; color: var(--secondary); margin-top: 50px; margin-bottom: 20px;
-            padding-bottom: 10px; border-bottom: 2px solid var(--primary); scroll-margin-top: 20px;
+            padding-bottom: 10px; border-bottom: 2px solid var(--primary); scroll-margin-top: 80px;
         }
         h3 { font-size: 1.4em; color: #34495e; margin-top: 30px; margin-bottom: 15px; }
         h4 { font-size: 1.2em; color: #34495e; margin-top: 25px; margin-bottom: 10px; }
@@ -188,7 +188,7 @@
 <li><a href="#19-git--deployment">Git &amp; Deployment</a></li>
 </ol>
 <hr>
-<h2>1. Project Overview</h2>
+<a id="1-project-overview"></a><h2> 1. Project Overview</h2>
 <h3>Technology Stack</h3>
 <table>
 <thead>
@@ -282,7 +282,7 @@
 └── index.js                      # Application entry point
 </code></pre>
 <hr>
-<h2>2. Naming Conventions</h2>
+<a id="2-naming-conventions"></a><h2> 2. Naming Conventions</h2>
 <h3>File Names</h3>
 <ul>
 <li><strong>Service files</strong>: <code>camelCase.service.js</code> (e.g., <code>auth.service.js</code>, <code>emailQueue.service.js</code>)</li>
@@ -352,7 +352,7 @@
 <li><strong>Backup actions</strong>: <code>tenant:backup:create</code>, <code>tenant:backup:restore</code></li>
 </ul>
 <hr>
-<h2>3. File Structure</h2>
+<a id="3-file-structure"></a><h2> 3. File Structure</h2>
 <h3>Service File Template</h3>
 <pre><code class="language-javascript">// service_name.service.js
 const { Model } = require(&quot;../models&quot;);
@@ -485,7 +485,7 @@ exports.formatErrors = (details) =&gt; {
 };
 </code></pre>
 <hr>
-<h2>4. Controller Standards</h2>
+<a id="4-controller-standards"></a><h2> 4. Controller Standards</h2>
 <h3>Import Order</h3>
 <ol>
 <li>Service imports</li>
@@ -527,7 +527,7 @@ throw { status: 404, message: &quot;Resource not found&quot; };
 }
 </code></pre>
 <hr>
-<h2>5. Service Standards</h2>
+<a id="5-service-standards"></a><h2> 5. Service Standards</h2>
 <h3>Transaction Pattern</h3>
 <pre><code class="language-javascript">let transaction;
 try {
@@ -601,7 +601,7 @@ queueEmail({
 });
 </code></pre>
 <hr>
-<h2>6. Route Standards</h2>
+<a id="6-route-standards"></a><h2> 6. Route Standards</h2>
 <h3>Route Definition</h3>
 <ul>
 <li>Use <code>express.Router()</code></li>
@@ -624,7 +624,7 @@ router.delete(&quot;/delete&quot;, auth, controller.delete);
 router.post(&quot;/:id/action&quot;, auth, controller.action);
 </code></pre>
 <hr>
-<h2>7. Validator Standards</h2>
+<a id="7-validator-standards"></a><h2> 7. Validator Standards</h2>
 <h3>Schema Organization</h3>
 <ol>
 <li>Common schemas (email, password, username, etc.)</li>
@@ -673,7 +673,7 @@ exports.formatErrors = (details) =&gt; {
 };
 </code></pre>
 <hr>
-<h2>8. Utility Standards</h2>
+<a id="8-utility-standards"></a><h2> 8. Utility Standards</h2>
 <h3>File Organization</h3>
 <ul>
 <li>One utility per file</li>
@@ -698,7 +698,7 @@ module.exports = {
 <li><code>response.js</code> - <code>success</code>, <code>error</code>, <code>notFound</code>, <code>badRequest</code></li>
 </ul>
 <hr>
-<h2>9. Middleware Standards</h2>
+<a id="9-middleware-standards"></a><h2> 9. Middleware Standards</h2>
 <h3>Middleware Order</h3>
 <ol>
 <li><code>globalSanitizer</code> - Input sanitization</li>
@@ -721,7 +721,7 @@ module.exports = {
 };
 </code></pre>
 <hr>
-<h2>10. Model Standards</h2>
+<a id="10-model-standards"></a><h2> 10. Model Standards</h2>
 <h3>Model Naming</h3>
 <ul>
 <li>Use PascalCase for model class names</li>
@@ -762,7 +762,7 @@ module.exports = Model;
 User.hasMany(Session, { foreignKey: &quot;userId&quot;, as: &quot;sessions&quot; });
 </code></pre>
 <hr>
-<h2>11. Error Handling</h2>
+<a id="11-error-handling"></a><h2> 11. Error Handling</h2>
 <h3>Error Format</h3>
 <p>Services throw:</p>
 <pre><code class="language-javascript">throw {
@@ -840,7 +840,7 @@ User.hasMany(Session, { foreignKey: &quot;userId&quot;, as: &quot;sessions&quot;
 </tbody>
 </table>
 <hr>
-<h2>12. Response Format</h2>
+<a id="12-response-format"></a><h2> 12. Response Format</h2>
 <h3>Success Response</h3>
 <pre><code class="language-json">{
   &quot;success&quot;: true,
@@ -863,7 +863,7 @@ User.hasMany(Session, { foreignKey: &quot;userId&quot;, as: &quot;sessions&quot;
 }
 </code></pre>
 <hr>
-<h2>13. Permission Format</h2>
+<a id="13-permission-format"></a><h2> 13. Permission Format</h2>
 <h3>Permission String Format</h3>
 <pre><code>module:action
 module:self:action
@@ -922,7 +922,7 @@ module:tenant:action
 </tbody>
 </table>
 <hr>
-<h2>14. Database Standards</h2>
+<a id="14-database-standards"></a><h2> 14. Database Standards</h2>
 <h3>Query Patterns</h3>
 <pre><code class="language-javascript">// Find with lock
 const record = await Model.findOne({
@@ -951,7 +951,7 @@ const { rows, count } = await Model.findAndCountAll({
 <li>Add unique indexes on email, username, code fields</li>
 </ul>
 <hr>
-<h2>15. Caching Standards</h2>
+<a id="15-caching-standards"></a><h2> 15. Caching Standards</h2>
 <h3>Redis Cache Keys</h3>
 <p>Use <code>cacheKeys</code> helper from <code>redis.service.js</code>:</p>
 <pre><code class="language-javascript">cacheKeys.userByEmail(email); // cache:user:email:{email}
@@ -1004,7 +1004,7 @@ cacheKeys.tenantSettings(id); // cache:tenant:settings:{id}
 <li>Always invalidate list caches when individual items change</li>
 </ul>
 <hr>
-<h2>16. Message Queue Standards</h2>
+<a id="16-message-queue-standards"></a><h2> 16. Message Queue Standards</h2>
 <h3>RabbitMQ Configuration</h3>
 <pre><code class="language-javascript">const RABBITMQ_URL = process.env.RABBITMQ_URL || &quot;amqp://localhost:5672&quot;;
 </code></pre>
@@ -1045,7 +1045,7 @@ channel.consume(queueName, (msg) =&gt; {
 }
 </code></pre>
 <hr>
-<h2>17. Documentation Standards</h2>
+<a id="17-documentation-standards"></a><h2> 17. Documentation Standards</h2>
 <h3>When to Generate Documentation</h3>
 <p>After <strong>every</strong> code change that affects:</p>
 <ol>
@@ -1149,7 +1149,7 @@ node scripts/generate-pdf.js
 </tbody>
 </table>
 <hr>
-<h2>18. Environment Variables</h2>
+<a id="18-environment-variables"></a><h2> 18. Environment Variables</h2>
 <h3>Required Variables</h3>
 <pre><code class="language-bash"># App
 PORT=3000
@@ -1201,7 +1201,7 @@ RABBITMQ_PASS=guest
 <li>Use descriptive names: <code>JWT_ACCESS_EXPIRED</code>, <code>BACKUP_SCHEDULER</code></li>
 </ul>
 <hr>
-<h2>19. Git &amp; Deployment</h2>
+<a id="19-git--deployment"></a><h2> 19. Git &amp; Deployment</h2>
 <h3>Git Workflow</h3>
 <ol>
 <li>Create feature branch: <code>feature/add-email-queue</code></li>
@@ -1226,7 +1226,7 @@ docker-compose logs -f backend
 docker exec -it backend node scripts/generate-html-doc.js
 </code></pre>
 <hr>
-<h2>Quick Reference</h2>
+<a id="quick-reference"></a><h2> Quick Reference</h2>
 <h3>Key Patterns</h3>
 <table>
 <thead>
