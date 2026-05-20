@@ -245,6 +245,7 @@ function generateSystemArchitecture() {
     subgraph Data["Data Layer"]
         PostgreSQL[(PostgreSQL<br/>Primary)]
         Redis[(Redis Cache)]
+        RabbitMQ[(RabbitMQ<br/>Message Queue)]
         FileSystem[File System<br/>Uploads/Backups]
     end
 
@@ -264,6 +265,7 @@ function generateSystemArchitecture() {
     Middleware --> RateLimit
     Backend --> PostgreSQL
     Backend --> Redis
+    Backend --> RabbitMQ
     Backend --> FileSystem
     Backend --> SMTP
     Backend --> S3
@@ -284,8 +286,9 @@ function generateAuthenticationFlow() {
     participant Frontend as Frontend App
     participant Auth as Auth Service
     participant DB as Database
-    participant Email as Email Service
     participant Cache as Redis Cache
+    participant Queue as RabbitMQ
+    participant Email as Email Service
 
     User->>Frontend: Register (email, password)
     Frontend->>Auth: POST /api/v1/auth/register
@@ -293,16 +296,19 @@ function generateAuthenticationFlow() {
     Auth->>Auth: Hash password
     Auth->>DB: Create user record
     DB-->>Auth: User created
-    Auth->>Email: Send activation email
-    Email-->>Auth: Email queued
+    Auth->>Queue: Add activation email job
+    Queue-->>Auth: Job queued
     Auth-->>Frontend: Activation token
     Frontend-->>User: Check email
 
     User->>Frontend: Click activation link
     Frontend->>Auth: GET /api/v1/auth/activate
+    Auth->>Cache: Check cache
+    Cache-->>Auth: Miss
     Auth->>DB: Verify token & user
     DB-->>Auth: User verified
     Auth->>DB: Update isEmailVerified
+    Auth->>Cache: Cache user
     Auth-->>Frontend: User activated
     Frontend-->>User: Account activated
 
@@ -729,7 +735,7 @@ function generateProjectStructure() {
  */
 function generateDockerArchitecture() {
   const mermaidCode = `graph TB
-    subgraph Docker["Docker Container"]
+    subgraph Docker["Docker Network"]
         subgraph Backend["Backend Service"]
             Node[Node.js/Express<br/>Port: 3000]
             Volumes[Volumes:<br/>/app/uploads<br/>/app/backup<br/>/app/log]
@@ -738,6 +744,16 @@ function generateDockerArchitecture() {
         subgraph Postgres["PostgreSQL"]
             PG[postgres:17-alpine<br/>Port: 5432]
             PGData[./data/postgres]
+        end
+
+        subgraph Redis["Redis"]
+            RDS[redis:8.6-alpine<br/>Port: 6379]
+            RDSData[./data/redis]
+        end
+
+        subgraph RabbitMQ["RabbitMQ"]
+            RMQ[rabbitmq:3.13-mgmt<br/>Port: 5672/15672]
+            RMQData[./data/rabbitmq]
         end
 
         subgraph PgAdmin["pgAdmin"]
@@ -757,9 +773,13 @@ function generateDockerArchitecture() {
     Volumes --> HostBackups
     Volumes --> HostLog
     PG --> PGData
+    RDS --> RDSData
+    RMQ --> RMQData
     PA --> PAData
     
     Node -.->|depends_on| PG
+    Node -.->|depends_on| RDS
+    Node -.->|depends_on| RMQ
     PA -.->|depends_on| PG
 `;
 

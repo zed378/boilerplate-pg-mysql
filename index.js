@@ -17,6 +17,7 @@ const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 
 const { swaggerDocs } = require("./src/docs/swagger");
+const path = require("path");
 
 const { Connection, db } = require("./src/config");
 
@@ -31,6 +32,13 @@ const { errorHandler } = require("./src/middlewares/errorHandlers");
 const { cronBackup } = require("./src/middlewares/backup");
 
 const { initSessionCleanup } = require("./src/middlewares/sessionCleanup");
+
+const { initRedis, closeRedis } = require("./src/services/redis.service");
+
+const {
+  processEmailQueue,
+  closeRabbitMQ,
+} = require("./src/services/emailQueue.service");
 
 const { accessLog } = require("./src/middlewares/accessLog");
 
@@ -322,6 +330,25 @@ app.get("/ready", async (req, res) => {
 });
 
 // ======================================================
+// DOCUMENTATION (HTML)
+// ======================================================
+
+const htmlDocPath = path.join(__dirname, "docs", "DOCUMENTATION.html");
+const codingStandardsPath = path.join(
+  __dirname,
+  "docs",
+  "CODING_STANDARDS.html",
+);
+
+app.get("/documentation", (req, res) => {
+  return res.sendFile(htmlDocPath);
+});
+
+app.get("/standards", (req, res) => {
+  return res.sendFile(codingStandardsPath);
+});
+
+// ======================================================
 // TEST ERROR ROUTE
 // ======================================================
 
@@ -356,9 +383,15 @@ async function startServer() {
     // Database Connection
     await Connection();
 
+    // Redis Connection
+    await initRedis();
+
     // Start Cron Jobs
     cronBackup();
     initSessionCleanup();
+
+    // Start Email Queue Worker (background processing)
+    await processEmailQueue();
 
     const port = process.env.PORT || 3000;
 
@@ -401,6 +434,14 @@ async function shutdown(signal) {
     await db.close();
 
     logger.info("Database connection closed.");
+
+    await closeRedis();
+
+    logger.info("Redis connection closed.");
+
+    await closeRabbitMQ();
+
+    logger.info("RabbitMQ connection closed.");
 
     process.exit(0);
   } catch (error) {

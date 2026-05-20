@@ -96,7 +96,8 @@ const svgMap = {
   "11-docker-architecture.svg": {
     id: "fig-docker-architecture",
     title: "Docker Architecture",
-    caption: "Containerized deployment with app, database, and cache services",
+    caption:
+      "Containerized deployment with app, database, Redis cache, and RabbitMQ message queue",
   },
 };
 
@@ -282,6 +283,9 @@ const htmlContent = `<!DOCTYPE html>
                     <tr><td>Authorization</td><td>RBAC + ABAC with 3 role levels</td></tr>
                     <tr><td>Multi-Tenancy</td><td>Full tenant isolation with feature flags</td></tr>
                     <tr><td>Rate Limiting</td><td>Token-based multi-layer rate limiter</td></tr>
+                    <tr><td>Caching</td><td>Redis-based caching for frequently accessed data</td></tr>
+                    <tr><td>Message Queue</td><td>RabbitMQ-based async email queue</td></tr>
+                    <tr><td>Distributed Locks</td><td>Redis-based distributed locking</td></tr>
                     <tr><td>API Docs</td><td>Swagger/OpenAPI auto-generated</td></tr>
                     <tr><td>Logging</td><td>Winston with daily rotating files</td></tr>
                 </tbody>
@@ -321,7 +325,7 @@ docker-compose up -d</code></pre>
             <p>The application uses environment variables for configuration.</p>
             <div class="illustration-container">
                 ${embedSVG(path.join(ILLUSTRATIONS_DIR, "11-docker-architecture.svg"))}
-                <p class="illustration-caption">Figure 3: Docker Architecture - Three container services</p>
+                <p class="illustration-caption">Figure 3: Docker Architecture - Four container services (Backend, PostgreSQL, Redis, RabbitMQ)</p>
             </div>
             <h3>Key Environment Variables</h3>
             <table>
@@ -332,6 +336,8 @@ docker-compose up -d</code></pre>
                     <tr><td>DB_DIALECT</td><td>Database type</td><td>postgres</td></tr>
                     <tr><td>JWT_ACCESS_SECRET</td><td>JWT secret key</td><td>-</td></tr>
                     <tr><td>BACKUP_SCHEDULER</td><td>Backup cron</td><td>0 0 * * *</td></tr>
+                    <tr><td>REDIS_HOST</td><td>Redis host</td><td>localhost</td></tr>
+                    <tr><td>RABBITMQ_URL</td><td>RabbitMQ connection URL</td><td>amqp://localhost:5672</td></tr>
                 </tbody>
             </table>
         </div>

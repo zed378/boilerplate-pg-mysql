@@ -16,8 +16,10 @@
 12. [Backup & Recovery](#12-backup--recovery)
 13. [Logging & Monitoring](#13-logging--monitoring)
 14. [Security Features](#14-security-features)
-15. [Testing](#15-testing)
-16. [Deployment](#16-deployment)
+15. [Performance Optimization](#15-performance-optimization)
+16. [Testing](#16-testing)
+17. [Deployment](#17-deployment)
+18. [Coding Standards](#18-coding-standards)
 
 ---
 
@@ -36,7 +38,10 @@ This is a **production-ready Express.js boilerplate** designed for building mult
 | **Authentication**     | JWT with access and refresh tokens                                    |
 | **Authorization**      | RBAC + ABAC with 3 role levels                                        |
 | **Multi-Tenancy**      | Full tenant isolation with identification, scoping, and feature flags |
-| **Rate Limiting**      | Token-based multi-layer rate limiter                                  |
+| **Rate Limiting**      | Token-based multi-layer rate limiter (in-memory + Redis)              |
+| **Caching**            | Redis-based caching for frequently accessed data                      |
+| **Message Queue**      | RabbitMQ-based async email queue for non-blocking operations          |
+| **Distributed Locks**  | Redis-based distributed locking to prevent race conditions            |
 | **API Documentation**  | Swagger/OpenAPI auto-generated                                        |
 | **Logging**            | Winston with daily rotating log files                                 |
 | **Security**           | Helmet, CORS, HPP, input sanitization                                 |
@@ -54,6 +59,7 @@ graph LR
     A[Frontend App] -->|HTTPS| B[Express.js API]
     B --> C[PostgreSQL/MySQL]
     B --> D[Redis]
+    B --> G[RabbitMQ]
     B --> E[Email Service]
     B --> F[File Storage]
 
@@ -263,27 +269,105 @@ npm start
 
 ### 4.1 Environment Variables
 
-| Variable              | Description              | Default       |
-| --------------------- | ------------------------ | ------------- |
-| `PORT`                | Server port              | `3000`        |
-| `SECRET`              | Application secret       | -             |
-| `NODE_ENV`            | Environment              | `development` |
-| `DB_HOST`             | Database host            | `localhost`   |
-| `DB_PORT`             | Database port            | `5432`        |
-| `DB_NAME`             | Database name            | `boilerplate` |
-| `DB_USER`             | Database user            | `boilerplate` |
-| `DB_PASS`             | Database password        | `supersecret` |
-| `DB_DIALECT`          | Database type            | `postgres`    |
-| `DB_SSL`              | Enable SSL               | `false`       |
-| `JWT_ACCESS_SECRET`   | JWT access token secret  | -             |
-| `JWT_ACCESS_EXPIRED`  | Access token expiry      | `10m`         |
-| `JWT_REFRESH_SECRET`  | JWT refresh token secret | -             |
-| `JWT_REFRESH_EXPIRED` | Refresh token expiry     | `7d`          |
-| `CORS_ORIGIN`         | Allowed origins          | -             |
-| `MAIL_HOST`           | Mail server host         | -             |
-| `BACKUP_SCHEDULER`    | Cron expression          | `0 0 * * *`   |
+| Variable              | Description              | Default                  |
+| --------------------- | ------------------------ | ------------------------ |
+| `PORT`                | Server port              | `3000`                   |
+| `SECRET`              | Application secret       | -                        |
+| `NODE_ENV`            | Environment              | `development`            |
+| `DB_HOST`             | Database host            | `localhost`              |
+| `DB_PORT`             | Database port            | `5432`                   |
+| `DB_NAME`             | Database name            | `boilerplate`            |
+| `DB_USER`             | Database user            | `boilerplate`            |
+| `DB_PASS`             | Database password        | `supersecret`            |
+| `DB_DIALECT`          | Database type            | `postgres`               |
+| `DB_SSL`              | Enable SSL               | `false`                  |
+| `JWT_ACCESS_SECRET`   | JWT access token secret  | -                        |
+| `JWT_ACCESS_EXPIRED`  | Access token expiry      | `10m`                    |
+| `JWT_REFRESH_SECRET`  | JWT refresh token secret | -                        |
+| `JWT_REFRESH_EXPIRED` | Refresh token expiry     | `7d`                     |
+| `CORS_ORIGIN`         | Allowed origins          | -                        |
+| `MAIL_HOST`           | Mail server host         | -                        |
+| `BACKUP_SCHEDULER`    | Cron expression          | `0 0 * * *`              |
+| `REDIS_URL`           | Redis connection URL     | `redis://localhost:6379` |
+| `REDIS_HOST`          | Redis host               | `localhost`              |
+| `REDIS_PORT`          | Redis port               | `6379`                   |
 
-### 4.2 Database Configuration
+### 4.2 Redis Configuration
+
+Redis is used for caching, distributed locking, message queuing, and rate limiting.
+
+#### Redis Connection
+
+```javascript
+const Redis = require("ioredis");
+
+const redis = new Redis(process.env.REDIS_URL, {
+  maxRetriesPerRequest: 3,
+  retryStrategy: (times) => {
+    if (times > 3) return null;
+    return Math.min(times * 200, 1000);
+  },
+  lazyConnect: true,
+});
+```
+
+#### Caching Strategy
+
+| Data Type        | Cache Key                  | TTL        | Invalidation            |
+| ---------------- | -------------------------- | ---------- | ----------------------- |
+| User by email    | `user:email:{email}`       | 1 hour     | On user update          |
+| User by username | `user:username:{username}` | 1 hour     | On user update          |
+| Tenant by ID     | `tenant:{id}`              | 10 minutes | On tenant update/delete |
+| Tenant by code   | `tenant:code:{code}`       | 10 minutes | On tenant update/delete |
+| Tenant settings  | `tenant:settings:{id}`     | 15 minutes | On settings update      |
+| Tenant list      | `tenants:page:{page}`      | 5 minutes  | On tenant CRUD          |
+
+#### Distributed Locks
+
+```javascript
+// Acquire lock
+const lockId = await acquireLock(`register:${email}:${username}`, 10000);
+if (!lockId) throw new Error("Operation in progress");
+
+// Release lock (atomic via Lua script)
+await releaseLock(`register:${email}:${username}`, lockId);
+```
+
+#### Email Queue (RabbitMQ)
+
+```javascript
+// Connect to RabbitMQ
+const connection = await amqp.connect(process.env.RABBITMQ_URL);
+const channel = await connection.createChannel();
+
+// Assert queue with dead letter exchange
+await channel.assertQueue("email_queue", {
+  durable: true,
+  arguments: {
+    "x-dead-letter-exchange": "",
+    "x-dead-letter-routing-key": "email_dlq",
+  },
+});
+
+// Send message
+channel.sendToQueue("email_queue", Buffer.stringify(jobData));
+
+// Consume with manual acknowledgment
+channel.consume("email_queue", (msg) => {
+  processEmail(JSON.parse(msg.content));
+  channel.ack(msg);
+});
+```
+
+Queue features:
+
+- Automatic retry with exponential backoff (3 retries max)
+- Dead letter queue (DLQ) for failed messages
+- Fallback to synchronous sending if RabbitMQ unavailable
+- Background worker with prefetch (10 messages)
+- Manual message acknowledgment
+
+### 4.3 Database Configuration
 
 ```mermaid
 graph LR
@@ -1011,7 +1095,127 @@ flowchart TD
 
 ---
 
-## 15. Testing
+## 15. Performance Optimization
+
+### 15.1 Redis Integration
+
+Redis is used for caching, distributed locking, message queuing, and rate limiting to improve application performance and prevent race conditions.
+
+#### Architecture
+
+```mermaid
+graph LR
+    A[API Request] --> B{Cache Hit?}
+    B -->|Yes| C[Return Cached Data]
+    B -->|No| D[Query Database]
+    D --> E[Cache Result]
+    E --> F[Return Data]
+
+    G[Email Service] -->|Queue| H[(Redis Queue)]
+    H -->|Worker| I[Send Email]
+
+    J[Register Request] --> K[Distributed Lock]
+    K --> L{Lock Available?}
+    L -->|Yes| M[Process Request]
+    L -->|No| N[Return 429]
+```
+
+#### Caching Layers
+
+| Layer           | Key Pattern            | TTL        | Purpose                    |
+| --------------- | ---------------------- | ---------- | -------------------------- |
+| User Lookup     | `user:email:{email}`   | 1 hour     | Fast user identification   |
+| Tenant Data     | `tenant:{id}`          | 10 minutes | Reduce database load       |
+| Tenant Settings | `tenant:settings:{id}` | 15 minutes | Quick configuration access |
+| Tenant List     | `tenants:page:{page}`  | 5 minutes  | Paginated list caching     |
+
+#### Distributed Locking
+
+Prevents race conditions during concurrent operations:
+
+```javascript
+// Registration race condition prevention
+const lockKey = `register:${email}:${username}`;
+const lockId = await acquireLock(lockKey, 10000);
+
+if (!lockId) {
+  throw { status: 429, message: "Registration in progress. Please wait." };
+}
+
+try {
+  // Process registration
+} finally {
+  await releaseLock(lockKey, lockId);
+}
+```
+
+#### Email Queue (RabbitMQ)
+
+Async email processing for non-blocking responses:
+
+```mermaid
+sequenceDiagram
+    participant API as API Endpoint
+    participant R as RabbitMQ
+    participant W as Worker
+    participant E as Email Service
+
+    API->>R: sendToQueue(email_queue)
+    API-->>Client: 200 OK (immediate)
+    W->>R: consume(email_queue)
+    R->>W: Deliver message
+    W->>E: Send email
+    E-->>W: Success/Failure
+    alt Failure
+        W->>R: NACK + requeue (backoff)
+    else Success
+        W->>R: ACK
+    end
+    alt Max retries exceeded
+        R->>R: Route to DLQ (email_dlq)
+    end
+```
+
+| Feature           | Description                                 |
+| ----------------- | ------------------------------------------- |
+| Retry Policy      | Exponential backoff (2^retries \* 1000ms)   |
+| Max Retries       | 3 attempts                                  |
+| Dead Letter Queue | Failed messages routed to email_dlq         |
+| Prefetch          | 10 messages per worker                      |
+| Fallback          | Synchronous sending if RabbitMQ unavailable |
+| Acknowledgment    | Manual ACK/NACK                             |
+
+### 15.2 Database Optimizations
+
+#### Row-Level Locking
+
+```javascript
+// Prevent concurrent duplicate checks
+const user = await Users.findOne({
+  where: { email },
+  transaction,
+  lock: transaction.LOCK.UPDATE,
+});
+```
+
+This generates `SELECT ... FOR UPDATE` to lock rows during transactions.
+
+#### Rate Limiting
+
+Redis-based rate limiting for OTP requests:
+
+```javascript
+const rateLimitKey = `otp:rate:${email}`;
+const count = await get(rateLimitKey);
+
+if (count >= 3) {
+  throw { status: 429, message: "Too many OTP requests" };
+}
+```
+
+---
+
+## 16. Testing
 
 ### 15.1 Test Structure
 
@@ -1064,22 +1268,51 @@ services:
     restart: always
     ports:
       - "3000:3000"
+    env_file:
+      - .env
     depends_on:
       - postgres
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data/redis:/data
 
   postgres:
     image: postgres:17-alpine
     container_name: postgres
     restart: always
+    env_file:
+      - .env
     ports:
       - "5432:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
 
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: pgadmin
     ports:
       - "8888:80"
+    depends_on:
+      - postgres
 ```
+
+**Services:**
+
+| Service  | Image              | Port  | Purpose               |
+| -------- | ------------------ | ----- | --------------------- |
+| backend  | Custom             | 3000  | Express.js API server |
+| redis    | redis:8.6-alpine   | 6379  | Caching, locks        |
+| rabbitmq | rabbitmq:3.13-mgmt | 5672  | Message queue         |
+| rabbitmq |                    | 15672 | Management UI         |
+| postgres | postgres:17-alpine | 5432  | Database              |
+| pgadmin  | dpage/pgadmin4     | 8888  | Database admin        |
 
 ### 16.2 Build for Production
 
@@ -1096,13 +1329,84 @@ npm run swagger:generate
 - [ ] Set `NODE_ENV=production`
 - [ ] Update all secrets in environment variables
 - [ ] Configure production database
+- [ ] Configure Redis (host, port, URL)
 - [ ] Set up SSL/TLS
 - [ ] Configure CORS origins
 - [ ] Set up log rotation
 - [ ] Configure backup schedule
 - [ ] Set up monitoring
 - [ ] Run database migrations
+- [ ] Verify Redis connection
+- [ ] Verify RabbitMQ connection
+- [ ] Test email queue processing
 - [ ] Seed initial data
+
+---
+
+## 18. Coding Standards
+
+For detailed coding standards, naming conventions, and best practices, see [`CODING_STANDARDS.md`](CODING_STANDARDS.md).
+
+### Key Standards Summary
+
+#### Naming Conventions
+
+| Element          | Convention                | Example                     |
+| ---------------- | ------------------------- | --------------------------- |
+| Service files    | `camelCase.service.js`    | `auth.service.js`           |
+| Controller files | `camelCase.controller.js` | `auth.controller.js`        |
+| Route files      | `camelCase.js`            | `auth.js`                   |
+| Validator files  | `camelCase.validator.js`  | `auth.validator.js`         |
+| Model files      | `snake_case.js`           | `login_record.js`           |
+| Constants        | `UPPER_SNAKE_CASE`        | `DEFAULT_PAGE`, `MAX_LIMIT` |
+| Functions        | `camelCase`               | `registerUser`, `loginUser` |
+| Variables        | `camelCase`               | `existingUser`, `lockId`    |
+
+#### Permission Format
+
+```
+module:action          -> user:create, tenant:read
+module:self:action     -> user:self:update
+module:tenant:action   -> user:tenant:assign
+```
+
+#### Response Format
+
+```json
+{
+  "success": true,
+  "status": 200,
+  "message": "Operation successful",
+  "data": { ... }
+}
+```
+
+#### Service Pattern
+
+- Use transactions with try/catch/rollback
+- Throw errors: `{ status: code, message: "text" }`
+- Return: `{ success, status, message, data }`
+- Use Redis caching with `get()`, `set()`, `del()`
+- Use distributed locks with `acquireLock()`, `releaseLock()`
+- Queue emails with `queueActivationEmail()`, `queueOtpEmail()`
+
+#### Documentation Generation
+
+```bash
+# Generate SVG illustrations
+node scripts/generate-mermaid-svg.js
+
+# Generate HTML documentation
+node scripts/generate-html-doc.js
+```
+
+Generate docs after:
+
+- API endpoint changes
+- Database schema changes
+- Environment variable changes
+- Docker service changes
+- Dependency changes
 
 ---
 

@@ -3,7 +3,6 @@ const fs = require("fs");
 
 const swaggerJsdoc = require("swagger-jsdoc");
 
-const outputPath = path.resolve(__dirname, "../../dist/swagger.json");
 const outputProdPath = path.resolve(__dirname, "../../swagger.json");
 
 const options = {
@@ -42,8 +41,6 @@ const options = {
 
 const swaggerSpec = swaggerJsdoc(options);
 
-fs.writeFileSync(outputPath, JSON.stringify(swaggerSpec, null, 2));
 fs.writeFileSync(outputProdPath, JSON.stringify(swaggerSpec, null, 2));
 
-console.log(`Swagger generated at ${outputPath}`);
 console.log(`Swagger generated at ${outputProdPath}`);

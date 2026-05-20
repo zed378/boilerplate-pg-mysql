@@ -9,7 +9,10 @@ A production-ready Express.js boilerplate with PostgreSQL/MySQL support, JWT aut
 - **Authentication**: JWT with access and refresh tokens
 - **Authorization**: RBAC + ABAC with 3 role levels
 - **Multi-Tenancy**: Full tenant isolation with identification, scoping, and feature flags
-- **Rate Limiting**: Token-based multi-layer rate limiter (in-memory)
+- **Rate Limiting**: Token-based multi-layer rate limiter (in-memory + Redis)
+- **Caching**: Redis-based caching for frequently accessed data
+- **Message Queue**: Redis-based async email queue for non-blocking operations
+- **Distributed Locks**: Redis-based distributed locking to prevent race conditions
 - **API Documentation**: Swagger/OpenAPI
 - **Logging**: Winston with daily rotate files
 - **Security**: Helmet, CORS, HPP, input sanitization
@@ -40,7 +43,9 @@ A production-ready Express.js boilerplate with PostgreSQL/MySQL support, JWT aut
 │   │   ├── tenant.service.js        # Tenant CRUD
 │   │   ├── tenantFeature.service.js # Feature flags
 │   │   ├── tenantAudit.service.js   # Audit logging
-│   │   └── tenantOnboarding.service.js # Onboarding workflow
+│   │   ├── tenantOnboarding.service.js # Onboarding workflow
+│   │   ├── redis.service.js         # Redis connection and caching
+│   │   └── emailQueue.service.js    # Async email queue worker
 │   ├── templates/       # Email templates
 │   ├── utils/           # Utility functions
 │   └── validators/      # Input validation schemas
@@ -114,6 +119,7 @@ For interactive HTML documentation with embedded diagrams, see:
 
 - Node.js 18+
 - PostgreSQL 14+ or MySQL 8+
+- Redis 7+ (for caching, message queue, and distributed locks)
 - npm or bun
 
 ### Installation
@@ -151,6 +157,11 @@ DB_NAME=your_database
 DB_USER=your_username
 DB_PASS=your_password
 DB_DIALECT=postgres  # or mysql
+
+# Redis
+REDIS_URL=redis://localhost:6379
+REDIS_HOST=localhost
+REDIS_PORT=6379
 
 # JWT
 JWT_ACCESS_SECRET=your-access-secret
@@ -523,10 +534,9 @@ The application uses environment variables for configuration. Copy `local.env` t
 
 #### URLs
 
-| Variable | Default               | Description                         |
-| -------- | --------------------- | ----------------------------------- |
-| HOST_URL | http://localhost:3000 | Backend server URL                  |
-| FE_URL   | http://localhost:5000 | Frontend URL (for activation links) |
+| Variable | Default               | Description        |
+| -------- | --------------------- | ------------------ |
+| HOST_URL | http://localhost:3000 | Backend server URL |
 
 #### Email (Nodemailer)
 
@@ -550,6 +560,50 @@ The application uses environment variables for configuration. Copy `local.env` t
 | Variable                  | Default      | Description                                 |
 | ------------------------- | ------------ | ------------------------------------------- |
 | SESSION_CLEANUP_SCHEDULER | 0 2 \* \* \* | Cron expression for expired session cleanup |
+
+#### Redis (Caching & Distributed Locks)
+
+| Variable   | Default                | Description          |
+| ---------- | ---------------------- | -------------------- |
+| REDIS_URL  | redis://localhost:6379 | Redis connection URL |
+| REDIS_HOST | localhost              | Redis host           |
+| REDIS_PORT | 6379                   | Redis port           |
+
+Redis is used for:
+
+- **Caching**: Frequently accessed data (users, tenants, settings) with configurable TTL
+- **Distributed Locking**: Prevent race conditions during concurrent operations
+- **Message Queue**: Async email sending via Redis-based queue
+- **Rate Limiting**: Fast Redis-based rate limiting for OTP requests
+
+### Redis Caching Strategy
+
+| Data Type        | Cache Key Pattern          | TTL        | Invalidation                   |
+| ---------------- | -------------------------- | ---------- | ------------------------------ |
+| User by email    | `user:email:{email}`       | 1 hour     | On user update                 |
+| User by username | `user:username:{username}` | 1 hour     | On user update                 |
+| Tenant by ID     | `tenant:{id}`              | 10 minutes | On tenant update/delete        |
+| Tenant by code   | `tenant:code:{code}`       | 10 minutes | On tenant update/delete        |
+| Tenant settings  | `tenant:settings:{id}`     | 15 minutes | On settings update             |
+| Tenant list      | `tenants:page:{page}`      | 5 minutes  | On tenant create/update/delete |
+
+### Email Queue
+
+The email queue processes emails asynchronously in the background:
+
+```javascript
+// Queue activation email
+queueActivationEmail({ email, firstName, lastName, activationLink });
+
+// Queue OTP email
+queueOtpEmail({ email, firstName, lastName, otp });
+```
+
+Queue features:
+
+- Automatic retry with exponential backoff (3 retries max)
+- Fallback to synchronous sending if Redis is unavailable
+- Queue stats monitoring via `getQueueStats()`
 
 ## Scheduled Tasks
 

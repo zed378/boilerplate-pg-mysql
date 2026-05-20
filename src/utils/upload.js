@@ -33,6 +33,7 @@ const fileFilter = (req, file, cb) => {
     "image/png",
     "image/gif",
     "image/webp",
+    "image/svg+xml",
   ];
   const allowedExtensions = req.allowedExtensions || [
     ".jpg",
@@ -40,6 +41,7 @@ const fileFilter = (req, file, cb) => {
     ".png",
     ".gif",
     ".webp",
+    ".svg",
   ];
 
   const ext = path.extname(file.originalname).toLowerCase();

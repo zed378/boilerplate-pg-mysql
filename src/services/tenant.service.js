@@ -10,6 +10,7 @@ const {
   createTenantSchema,
   updateTenantSchema,
 } = require("../validators/tenant.validator");
+const { get, set, del, delPattern, cacheKeys } = require("./redis.service");
 
 // ==========================================
 // VALIDATION HELPERS
@@ -46,6 +47,22 @@ const safeTenantAttributes = {
 // ------------------------------------------------------------------
 exports.fetchTenants = async ({ find, page = 1, limit = DEFAULT_LIMIT }) => {
   try {
+    // Only cache simple fetches (no search, paginated)
+    const shouldCache = !find && Number(page) === 1;
+
+    if (shouldCache) {
+      const cacheKey = `tenants:page:1:limit:${limit}`;
+      const cached = await get(cacheKey);
+      if (cached) {
+        return {
+          data: cached.rows,
+          message: "Fetch tenants successful (cached)",
+          status: 200,
+          meta: cached.meta,
+        };
+      }
+    }
+
     const whereClause = {};
 
     // Free-text search (case-insensitive)
@@ -73,7 +90,7 @@ exports.fetchTenants = async ({ find, page = 1, limit = DEFAULT_LIMIT }) => {
       offset: (Number(page) - 1) * Number(limit),
     });
 
-    return {
+    const result = {
       data: rows,
       message: "Fetch tenants successful",
       status: 200,
@@ -84,6 +101,14 @@ exports.fetchTenants = async ({ find, page = 1, limit = DEFAULT_LIMIT }) => {
         totalPages: Math.ceil(count / Number(limit)),
       },
     };
+
+    // Cache first page only for 5 minutes
+    if (shouldCache) {
+      const cacheKey = `tenants:page:1:limit:${limit}`;
+      await set(cacheKey, { rows: result.data, meta: result.meta }, 300);
+    }
+
+    return result;
   } catch (error) {
     logger.error("Error fetching tenants", { error: error.message });
     throw new AppError("Internal server error", 500);
@@ -95,6 +120,17 @@ exports.fetchTenants = async ({ find, page = 1, limit = DEFAULT_LIMIT }) => {
 // ------------------------------------------------------------------
 exports.fetchSpecificTenant = async (tenantId) => {
   try {
+    // Try cache first
+    const cacheKey = cacheKeys.tenant(tenantId);
+    const cached = await get(cacheKey);
+    if (cached) {
+      return {
+        data: cached,
+        message: "Fetch tenant successful (cached)",
+        status: 200,
+      };
+    }
+
     const tenant = await Tenants.findByPk(tenantId, {
       attributes: { exclude: ["createdAt", "updatedAt", "createdBy"] },
       include: [
@@ -114,6 +150,9 @@ exports.fetchSpecificTenant = async (tenantId) => {
         status: 404,
       };
     }
+
+    // Cache for 10 minutes
+    await set(cacheKey, tenant, 600);
 
     return {
       data: tenant,
@@ -172,6 +211,13 @@ exports.createTenant = async (input, createdBy) => {
     );
 
     await transaction.commit();
+
+    // Cache new tenant by ID and code
+    await set(cacheKeys.tenant(tenant.id), tenant, 600);
+    await set(cacheKeys.tenantByCode(code), tenant, 600);
+
+    // Invalidate tenant list cache
+    await delPattern("tenants:*");
 
     logger.info("Tenant created", {
       tenantId: tenant.id,
@@ -252,6 +298,18 @@ exports.updateTenant = async (tenantId, input, updatedBy) => {
 
     await transaction.commit();
 
+    // Update cache with new tenant data
+    await set(cacheKeys.tenant(tenantId), tenant, 600);
+
+    // Update cache by code if code changed
+    if (code && code !== tenant.code) {
+      await del(cacheKeys.tenantByCode(tenant.code));
+      await set(cacheKeys.tenantByCode(code), tenant, 600);
+    }
+
+    // Invalidate tenant list cache
+    await delPattern("tenants:*");
+
     logger.info("Tenant updated", {
       tenantId,
       updatedBy,
@@ -303,6 +361,12 @@ exports.deleteTenant = async (tenantId, deletedBy) => {
 
     await transaction.commit();
 
+    // Invalidate all tenant caches
+    await del(cacheKeys.tenant(tenantId));
+    await del(cacheKeys.tenantByCode(tenant.code));
+    await delPattern("tenants:*");
+    await delPattern(`tenant:settings:${tenantId}`);
+
     logger.info("Tenant deleted", {
       tenantId,
       deletedBy,
@@ -327,6 +391,17 @@ exports.deleteTenant = async (tenantId, deletedBy) => {
 // ------------------------------------------------------------------
 exports.getTenantSettings = async (tenantId) => {
   try {
+    // Try cache first
+    const cacheKey = cacheKeys.tenantSettings(tenantId);
+    const cached = await get(cacheKey);
+    if (cached) {
+      return {
+        data: cached,
+        message: "Fetch tenant settings successful (cached)",
+        status: 200,
+      };
+    }
+
     const tenant = await Tenants.findByPk(tenantId, {
       include: [
         {
@@ -352,8 +427,13 @@ exports.getTenantSettings = async (tenantId) => {
       });
     }
 
+    const result = { tenant, settings };
+
+    // Cache for 15 minutes
+    await set(cacheKey, result, 900);
+
     return {
-      data: { tenant, settings },
+      data: result,
       message: "Fetch tenant settings successful",
       status: 200,
     };
@@ -392,6 +472,9 @@ exports.updateTenantSettings = async (tenantId, settingsData, updatedBy) => {
     }
 
     await transaction.commit();
+
+    // Invalidate settings cache
+    await del(cacheKeys.tenantSettings(tenantId));
 
     logger.info("Tenant settings updated", {
       tenantId,

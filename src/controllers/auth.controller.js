@@ -10,7 +10,10 @@ const { recordFailedAttempt } = require("../services/rateLimiter.service");
 
 exports.register = asyncHandlerWithMapping(
   async (req, res) => {
-    await authService.registerUser(req.body); // service creates its own tx
+    // Use Origin header for multi-tenant support, fall back to Host header
+    const origin = req.headers.origin || req.headers.host || "";
+
+    await authService.registerUser(req.body, origin); // service creates its own tx
 
     success(
       res,

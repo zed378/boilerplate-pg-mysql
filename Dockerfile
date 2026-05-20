@@ -24,7 +24,7 @@ RUN npm run swagger:generate
 # Build standalone Linux binary
 RUN npx @yao-pkg/pkg . \
     --targets node24-linux-x64 \
-    --output dist/backend
+    --output /app/backend
 
 # ==========================================
 # STAGE 2 — RUNTIME

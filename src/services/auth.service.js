@@ -18,6 +18,17 @@ const {
   forgotPasswordSchema,
   resetPasswordSchema,
 } = require("../validators/auth.validator");
+const {
+  acquireLock,
+  releaseLock,
+  get,
+  set,
+  cacheKeys,
+} = require("../services/redis.service");
+const {
+  queueActivationEmail,
+  queueOtpEmail,
+} = require("../services/emailQueue.service");
 
 // ==========================================
 // VALIDATION HELPERS
@@ -44,29 +55,47 @@ const validate = (data, schema) => {
 // ==========================================
 // REGISTER
 // ==========================================
-exports.registerUser = async (input) => {
+exports.registerUser = async (input, origin) => {
   // Validate input
   const data = validate(input, registerSchema);
   const { firstName, lastName, username, email, password } = data;
+
+  // Use origin from request header for multi-tenant support
+  const baseOrigin = origin || "";
+
+  // ---- distributed lock for race condition prevention -------------------
+  const lockKey = `register:${email}:${username}`;
+  const lockId = await acquireLock(lockKey, 10000);
+
+  if (!lockId) {
+    throw {
+      status: 429,
+      message: "Registration in progress. Please wait and try again.",
+    };
+  }
 
   let transaction;
   try {
     transaction = await db.transaction();
 
-    // ---- duplicate checks -------------------------------------------------
+    // ---- duplicate checks with SELECT FOR UPDATE -------------------------
     const existingUser = await Users.findOne({
       where: { email },
       transaction,
+      lock: transaction.LOCK.UPDATE,
     });
     if (existingUser) {
+      await transaction.rollback();
       throw { status: 409, message: "Email already registered" };
     }
 
     const existingUsername = await Users.findOne({
       where: { username },
       transaction,
+      lock: transaction.LOCK.UPDATE,
     });
     if (existingUsername) {
+      await transaction.rollback();
       throw { status: 409, message: "Username already used" };
     }
 
@@ -84,29 +113,43 @@ exports.registerUser = async (input) => {
       { transaction },
     );
 
-    // ---- activation email -------------------------------------------------
+    // ---- cache user email mapping ----------------------------------------
+    await set(cacheKeys.userByEmail(email), user.id, 86400);
+    await set(cacheKeys.userByUsername(username), user.id, 86400);
+
+    // ---- activation email (async via queue) ------------------------------
     const activationToken = generateAccessToken({
       id: user.id,
       type: "activation",
     });
-    const activationLink = `${process.env.FE_URL}/activation?token=${activationToken}`;
+    const activationLink = `${baseOrigin}/activation?token=${activationToken}`;
 
-    await sendActivationEmail({
+    // Fire and forget - email sent asynchronously
+    queueActivationEmail({
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
       activationLink,
+    }).catch((err) => {
+      // Log but don't fail registration if email queue fails
+      console.error("Failed to queue activation email:", err.message);
     });
 
     await transaction.commit();
+
+    // Release lock after successful registration
+    await releaseLock(lockKey, lockId);
+
     return {
       success: true,
       status: 201,
       message:
-        "Registration successful. Please check your email for activation. If you didn't receive an email just check junk orspam folder.",
+        "Registration successful. Please check your email for activation. If you didn't receive an email just check junk or spam folder.",
     };
   } catch (error) {
     if (transaction) await transaction.rollback();
+    // Release lock on error too
+    await releaseLock(lockKey, lockId).catch(() => {});
     throw {
       status: error.status || 500,
       message: error.message,
@@ -311,21 +354,56 @@ exports.requestOTP = async (input) => {
   const data = validate(input, forgotPasswordSchema);
   const { email } = data;
 
+  // ---- Redis rate limiting ------------------------------------------------
+  const rateLimitKey = `otp:rate:${email}`;
+  const rateLimitCount = await get(rateLimitKey);
+
+  if (rateLimitCount !== null && rateLimitCount >= 3) {
+    throw {
+      status: 429,
+      message: "Too many OTP requests. Please wait 1 minute.",
+    };
+  }
+
   let transaction;
   try {
     transaction = await db.transaction();
 
-    const user = await Users.findOne({ where: { email }, transaction });
+    // ---- Use cached user lookup if available ------------------------------
+    let user;
+    const cachedUserId = await get(cacheKeys.userByEmail(email));
+
+    if (cachedUserId) {
+      user = await Users.findByPk(cachedUserId, {
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+    }
+
+    // Fallback to email lookup if cache miss
+    if (!user) {
+      user = await Users.findOne({
+        where: { email },
+        transaction,
+        lock: transaction.LOCK.UPDATE,
+      });
+    }
+
     if (!user) {
       // Do not reveal whether an account exists – still return success
       await transaction.commit();
+      // Still increment rate limit counter
+      await set(rateLimitKey, (rateLimitCount || 0) + 1, 60);
       return {
         success: true,
         status: 200,
         message: "If the account exists, OTP has been sent",
       };
     }
+
     if (!user.isEmailVerified) {
+      await transaction.commit();
+      await set(rateLimitKey, (rateLimitCount || 0) + 1, 60);
       throw { status: 403, message: "Account email not verified" };
     }
 
@@ -333,6 +411,8 @@ exports.requestOTP = async (input) => {
     if (user.otpLastRequestedAt) {
       const diff = now - new Date(user.otpLastRequestedAt).getTime();
       if (diff < 60 * 1000) {
+        await transaction.commit();
+        await set(rateLimitKey, (rateLimitCount || 0) + 1, 60);
         throw {
           status: 429,
           message: "Please wait before requesting another OTP",
@@ -352,14 +432,21 @@ exports.requestOTP = async (input) => {
       { transaction },
     );
 
-    await sendOtpEmail({
+    await transaction.commit();
+
+    // ---- Update rate limit counter ----------------------------------------
+    await set(rateLimitKey, (rateLimitCount || 0) + 1, 60);
+
+    // ---- Queue OTP email asynchronously -----------------------------------
+    queueOtpEmail({
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
       otp,
+    }).catch((err) => {
+      console.error("Failed to queue OTP email:", err.message);
     });
 
-    await transaction.commit();
     return {
       success: true,
       status: 200,
